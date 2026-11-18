@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>unwind.click</title>
+<meta name="description" content="unwind.click — a calm focus timer with a quiet rain scene.">
+<meta name="theme-color" content="#aac3cb">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23aac3cb'/%3E%3Cpath d='M4 40 Q32 30 60 40 V60 H4Z' fill='%235f818b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+<style>
+  /* A soft, hazy rain scene in one blue hue: drifting cloud, a veiled moon, mountains fading into mist,
+     a rain veil, and a calm lake that rises as the session runs. Over it: a small picker and one glass button. */
+  :root {
+    --fg: #16292e;
+    --muted: #517077;
+    --faint: #88a4aa;
+    --glass: rgba(255, 255, 255, 0.30);
+    --glass-line: rgba(22, 60, 66, 0.16);
+    --glass-ink: #0f2429;
+    --ink-shadow: rgba(255, 255, 255, 0.55);
+    --sky-fallback: #dde9ea;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --fg: #dceef0;
+      --muted: #8aa9af;
+      --faint: #5a757c;
+      --glass: rgba(120, 190, 200, 0.09);
+      --glass-line: rgba(170, 230, 238, 0.18);
+      --glass-ink: #ecfbff;
+      --ink-shadow: rgba(0, 18, 24, 0.6);
+      --sky-fallback: #060f15;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --fg: #dceef0;
+    --muted: #8aa9af;
+    --faint: #5a757c;
+    --glass: rgba(120, 190, 200, 0.09);
+    --glass-line: rgba(170, 230, 238, 0.18);
+    --glass-ink: #ecfbff;
+    --ink-shadow: rgba(0, 18, 24, 0.6);
+    --sky-fallback: #060f15;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--sky-fallback);
+    color: var(--fg);
+    font-family: "Hanken Grotesk", system-ui, sans-serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; }
+
+  .stage {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(28px, 6vh, 54px);
+    padding: 24px 16px;
+    padding-block: max(24px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .brand {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 400;
+    font-size: .95rem;
+    letter-spacing: .02em;
+    color: var(--glass-ink);
+    opacity: .6;
+    text-shadow: 0 1px 12px var(--ink-shadow);
+    user-select: none;
+    transition: opacity .8s ease;
+  }
+  .running .brand { opacity: .28; }
+
+  .picker { display: inline-flex; gap: 6px; }
+  .picker button {
+    appearance: none;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--glass-ink);
+    opacity: .7;
+    font-family: inherit;
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    padding: 8px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    text-shadow: 0 1px 10px var(--ink-shadow);
+    transition: opacity .3s, background .3s, border-color .3s;
+  }
+  .picker button:hover { opacity: 1; }
+  .picker button[aria-selected="true"] {
+    opacity: 1;
+    background: var(--glass);
+    border-color: var(--glass-line);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+
+  .orb {
+    appearance: none;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--glass-ink);
+    width: min(64vw, 270px);
+    aspect-ratio: 1;
+    max-width: 100%;
+    border-radius: 50%;
+    border: 1px solid var(--glass-line);
+    background:
+      radial-gradient(130% 110% at 30% 18%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 46%),
+      var(--glass);
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.20),
+                inset 0 2px 1px rgba(255, 255, 255, 0.40),
+                inset 0 -16px 32px rgba(0, 0, 0, 0.10);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: transform .4s cubic-bezier(.2,.9,.3,1);
+  }
+  .orb:hover { transform: scale(1.012); }
+  .orb:active { transform: scale(.985); }
+  .time {
+    font-size: clamp(3rem, 14vw, 4.3rem);
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 2px 20px var(--ink-shadow);
+  }
+  .state {
+    font-size: .72rem;
+    letter-spacing: .28em;
+    text-transform: uppercase;
+    color: var(--muted);
+    min-height: 1em;
+  }
+
+  :focus-visible { outline: 2px solid var(--glass-line); outline-offset: 6px; }
+  @media (prefers-reduced-motion: reduce) { .orb, .brand, .picker button { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<main class="stage" id="stage">
+  <div class="brand">unwind.click</div>
+  <nav class="picker" role="tablist" aria-label="Session length">
+    <button role="tab" data-min="25" aria-selected="true">25 min</button>
+    <button role="tab" data-min="5" aria-selected="false">5 min</button>
+    <button role="tab" data-min="15" aria-selected="false">15 min</button>
+  </nav>
+  <button class="orb" id="orb" aria-label="Start or pause the timer">
+    <span class="time" id="time">25:00</span>
+    <span class="state" id="state">tap to begin</span>
+  </button>
+</main>
+
+<script>
+  (function () {
+    "use strict";
+
+    var stage = document.getElementById("stage"), orb = document.getElementById("orb");
+    var timeEl = document.getElementById("time"), stateEl = document.getElementById("state");
+    var tabs = Array.prototype.slice.call(document.querySelectorAll(".picker button"));
+    var canvas = document.getElementById("scene"), ctx = canvas.getContext("2d");
+    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+    var prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+    // ---------- timer ----------
+    var mins = 25, total = mins * 60000, remaining = total, endAt = 0, running = false, finishedAt = 0, audioCtx = null;
+    function fmt(ms){var s=Math.max(0,Math.round(ms/1000)),m=Math.floor(s/60),r=s%60;return (m<10?"0":"")+m+":"+(r<10?"0":"")+r;}
+    function leftMs(){return running?Math.max(0,endAt-Date.now()):remaining;}
+    function progress(){return total>0?(total-leftMs())/total:0;}
+    function render(){
+      var left=leftMs();
+      timeEl.textContent=fmt(left);
+      document.title=(running?fmt(left)+" · ":"")+"unwind.click";
+      stateEl.textContent=running?"pause":(left<total?"resume":"tap to begin");
+      stage.classList.toggle("running",running);
+    }
+    function setMinutes(m){mins=m;total=m*60000;remaining=total;running=false;endAt=0;tabs.forEach(function(t){t.setAttribute("aria-selected",String(+t.dataset.min===m));});render();}
+    function start(){ensureAudio();if(remaining<=0)remaining=total;endAt=Date.now()+remaining;running=true;render();}
+    function pause(){remaining=leftMs();running=false;render();}
+    function toggle(){running?pause():start();}
+    function tick(){
+      if(running&&Date.now()>=endAt){running=false;remaining=0;finishedAt=Date.now();chime();render();setTimeout(function(){remaining=total;render();},3000);}
+      else if(running){render();}
+    }
+    setInterval(tick,250);
+    function ensureAudio(){if(audioCtx)return;try{var AC=window.AudioContext||window.webkitAudioContext;if(AC)audioCtx=new AC();}catch(e){audioCtx=null;}}
+    function chime(){
+      if(!audioCtx)return;
+      try{
+        if(audioCtx.state==="suspended")audioCtx.resume();
+        var now=audioCtx.currentTime;
+        [587.33,783.99,1046.5].forEach(function(f,i){
+          var o=audioCtx.createOscillator(),g=audioCtx.createGain();
+          o.type="sine";o.frequency.value=f;var t=now+i*0.22;
+          g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.14,t+0.03);g.gain.exponentialRampToValueAtTime(0.0001,t+1.4);
+          o.connect(g).connect(audioCtx.destination);o.start(t);o.stop(t+1.5);
+        });
+      }catch(e){}
+    }
+
+    // ---------- helpers ----------
+    function isDark(){var a=document.documentElement.getAttribute("data-theme");if(a==="dark")return true;if(a==="light")return false;return prefersDark.matches;}
+    function lerp(a,b,t){return a+(b-a)*t;}
+    function smooth(t){return t*t*(3-2*t);}
+    // smooth value noise from a list of random control points
+    function noiseLine(ctrl, u){ // u in 0..1
+      var x=u*(ctrl.length-1), i=Math.floor(x), f=x-i;
+      var a=ctrl[i], b=ctrl[Math.min(ctrl.length-1,i+1)];
+      return lerp(a,b,smooth(f));
+    }
+    function randCtrl(n){var a=[];for(var i=0;i<=n;i++)a.push(Math.random());return a;}
+
+    function pal(){
+      return isDark()?{
+        sky0:"#05101a", sky1:"#0f2a36", cloud:"170,215,228",
+        moon:"#d6eef2", moonHalo:"150,205,220",
+        m1a:"#1b4250", m1b:"#13303c", m2a:"#102c38", m2b:"#0a2029", m3a:"#081920", m3b:"#04111a",
+        mist:"130,185,200", rain:"190,225,233",
+        wTop:"45,120,138", wBot:"4,18,26", reflect:"205,238,245", fog:"120,175,192"
+      }:{
+        sky0:"#aac3cb", sky1:"#e6f0f1", cloud:"255,255,255",
+        moon:"#ffffff", moonHalo:"255,255,255",
+        m1a:"#8fb0ba", m1b:"#aecad1", m2a:"#789aa4", m2b:"#95b6bf", m3a:"#5f818b", m3b:"#80a2ac",
+        mist:"235,244,245", rain:"90,120,130",
+        wTop:"150,190,198", wBot:"80,120,130", reflect:"255,255,255", fog:"230,240,242"
+      };
+    }
+
+    // ---------- build ----------
+    var W=0,H=0,dpr=1,horizonY=0,moonX=0,moonY=0,moonR=0;
+    var ridges=[], clouds=[], rainFar=[], rainNear=[], ripples=[], grain=null, grainPat=null;
+
+    function makeRidge(baseFrac, amp){
+      var base=H*baseFrac, big=randCtrl(5), mid=randCtrl(11), fine=randCtrl(23), pts=[];
+      for(var x=0;x<=W+16;x+=10){
+        var u=x/W;
+        var h=noiseLine(big,u)*amp + noiseLine(mid,u)*amp*0.4 + noiseLine(fine,u)*amp*0.18;
+        pts.push([x, base - h]);
+      }
+      return {pts:pts, base:base};
+    }
+    function newDrop(layer,spread){
+      var near=layer==="near";
+      var v=(near?9:5)+Math.random()*(near?7:4);
+      if(reduce.matches)v*=0.55;
+      return {x:Math.random()*(W+160)-80, y:spread?Math.random()*H:-Math.random()*80,
+              l:(near?14:7)+Math.random()*(near?18:10), v:v, a:(near?0.18:0.1)+Math.random()*(near?0.22:0.12)};
+    }
+    function buildScene(){
+      horizonY=H*0.48; moonR=Math.max(22,Math.min(W,H)*0.05); moonX=W*0.70; moonY=H*0.20;
+      ridges=[ makeRidge(0.47,H*0.10), makeRidge(0.51,H*0.15), makeRidge(0.57,H*0.22) ];
+      clouds=[];
+      var cn=4+Math.round(W/700);
+      for(var i=0;i<cn;i++)clouds.push({x:Math.random()*W, y:H*(0.06+Math.random()*0.28), w:W*(0.3+Math.random()*0.4), h:H*(0.05+Math.random()*0.06), a:0.05+Math.random()*0.07, s:(0.004+Math.random()*0.006)*(Math.random()<0.5?-1:1)});
+      var fn=reduce.matches?50:Math.max(70,Math.round(W/9));
+      var nn=reduce.matches?30:Math.max(45,Math.round(W/14));
+      rainFar=[];for(var a=0;a<fn;a++)rainFar.push(newDrop("far",true));
+      rainNear=[];for(var b=0;b<nn;b++)rainNear.push(newDrop("near",true));
+      // film grain tile
+      var g=document.createElement("canvas");g.width=120;g.height=120;var gc=g.getContext("2d");
+      var id=gc.createImageData(120,120),dd=id.data;
+      for(var k=0;k<dd.length;k+=4){var n=200+Math.random()*55|0;dd[k]=dd[k+1]=dd[k+2]=n;dd[k+3]=255;}
+      gc.putImageData(id,0,0);grain=g;grainPat=ctx.createPattern(g,"repeat");
+    }
+    function resize(){
+      dpr=Math.min(2,window.devicePixelRatio||1);W=window.innerWidth;H=window.innerHeight;
+      canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);canvas.style.width=W+"px";canvas.style.height=H+"px";
+      ctx.setTransform(dpr,0,0,dpr,0,0);buildScene();
+    }
+    window.addEventListener("resize",resize);
+
+    var wy=0;
+    function targetWaterY(){
+      var restY=H*0.90;
+      if(finishedAt&&Date.now()-finishedAt<3000)return horizonY-H*0.03;
+      return restY+(horizonY-restY)*progress();
+    }
+    function surfaceAt(x,t,amp){
+      return wy + amp*Math.sin(x/(W/5)+t*0.4) + amp*0.5*Math.sin(x/(W/11)-t*0.62) + amp*0.25*Math.sin(x/(W/23)+t*0.9);
+    }
+
+    function drawRidge(r, topColor, baseColor){
+      var g=ctx.createLinearGradient(0,r.base-H*0.26,0,r.base);
+      g.addColorStop(0,topColor); g.addColorStop(1,baseColor);
+      ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(r.pts[0][0],r.pts[0][1]);
+      for(var i=1;i<r.pts.length;i++)ctx.lineTo(r.pts[i][0],r.pts[i][1]);
+      ctx.lineTo(W,H); ctx.closePath(); ctx.fillStyle=g; ctx.fill();
+    }
+
+    function frame(ms){
+      var t=ms/1000,p=pal(),calm=reduce.matches?0.4:1,amp=5*calm;
+      wy+=(targetWaterY()-(wy||targetWaterY()))*0.05;
+
+      // sky
+      var sky=ctx.createLinearGradient(0,0,0,horizonY+H*0.14);
+      sky.addColorStop(0,p.sky0);sky.addColorStop(1,p.sky1);
+      ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+
+      // drifting soft clouds
+      for(var c=0;c<clouds.length;c++){
+        var cl=clouds[c];cl.x+=cl.s*W*0.016;
+        if(cl.x>W+cl.w)cl.x=-cl.w;if(cl.x<-cl.w)cl.x=W+cl.w;
+        var cg=ctx.createRadialGradient(cl.x,cl.y,0,cl.x,cl.y,cl.w*0.5);
+        cg.addColorStop(0,"rgba("+p.cloud+","+cl.a+")");cg.addColorStop(1,"rgba("+p.cloud+",0)");
+        ctx.save();ctx.translate(cl.x,cl.y);ctx.scale(1,cl.h/(cl.w*0.5));ctx.translate(-cl.x,-cl.y);
+        ctx.fillStyle=cg;ctx.beginPath();ctx.arc(cl.x,cl.y,cl.w*0.5,0,6.2832);ctx.fill();ctx.restore();
+      }
+
+      // veiled moon
+      var halo=ctx.createRadialGradient(moonX,moonY,moonR*0.3,moonX,moonY,moonR*5);
+      halo.addColorStop(0,"rgba("+p.moonHalo+",0.4)");halo.addColorStop(1,"rgba("+p.moonHalo+",0)");
+      ctx.fillStyle=halo;ctx.beginPath();ctx.arc(moonX,moonY,moonR*5,0,6.2832);ctx.fill();
+      if(isDark()){ctx.fillStyle=p.moon;ctx.globalAlpha=0.85;ctx.beginPath();ctx.arc(moonX,moonY,moonR,0,6.2832);ctx.fill();ctx.globalAlpha=1;}
+
+      // mountains, each fading into haze at its base (aerial perspective)
+      drawRidge(ridges[0],p.m1a,p.m1b);
+      ctx.fillStyle="rgba("+p.mist+",0.10)";ctx.fillRect(0,horizonY-H*0.16,W,H*0.22);
+      drawRidge(ridges[1],p.m2a,p.m2b);
+      ctx.fillStyle="rgba("+p.mist+",0.09)";ctx.fillRect(0,horizonY-H*0.06,W,H*0.2);
+      drawRidge(ridges[2],p.m3a,p.m3b);
+
+      // low fog drifting over the waterline
+      var fog=ctx.createLinearGradient(0,wy-H*0.14,0,wy+H*0.04);
+      fog.addColorStop(0,"rgba("+p.fog+",0)");fog.addColorStop(0.5,"rgba("+p.fog+",0.12)");fog.addColorStop(1,"rgba("+p.fog+",0)");
+      ctx.fillStyle=fog;ctx.fillRect(0,wy-H*0.14,W,H*0.18);
+
+      // rain veil — far (fine) then near (longer), drawn before water so it meets the surface
+      function drawRain(list,wind){
+        ctx.lineWidth=0.9;ctx.lineCap="round";
+        for(var d=0;d<list.length;d++){
+          var dr=list[d];
+          ctx.strokeStyle="rgba("+p.rain+","+dr.a.toFixed(2)+")";
+          ctx.beginPath();ctx.moveTo(dr.x,dr.y);ctx.lineTo(dr.x-wind,dr.y-dr.l);ctx.stroke();
+          dr.y+=dr.v;dr.x-=wind*0.25;
+          var hit=surfaceAt(dr.x,t,amp);
+          if(dr.y>=hit){ if(ripples.length<60&&Math.random()<0.5)ripples.push({x:dr.x,y:hit,r:1,a:0.4}); list[d]=newDrop(list===rainNear?"near":"far",false); }
+          else if(dr.y>H)list[d]=newDrop(list===rainNear?"near":"far",false);
+        }
+      }
+      drawRain(rainFar,2.2);
+      drawRain(rainNear,3.4);
+
+      // lake
+      ctx.beginPath();ctx.moveTo(0,H);ctx.lineTo(0,surfaceAt(0,t,amp));
+      for(var x=0;x<=W;x+=8)ctx.lineTo(x,surfaceAt(x,t,amp));
+      ctx.lineTo(W,H);ctx.closePath();
+      var wg=ctx.createLinearGradient(0,wy,0,H);
+      wg.addColorStop(0,"rgba("+p.wTop+",0.60)");wg.addColorStop(1,"rgba("+p.wBot+",0.94)");
+      ctx.fillStyle=wg;ctx.fill();
+
+      // soft moonlight reflection: a blurred vertical glow, gently wavering (no hard stripes)
+      ctx.save();
+      ctx.beginPath();ctx.rect(0,wy-2,W,H-wy+4);ctx.clip();
+      var sway=Math.sin(t*0.8)*6;
+      var rg=ctx.createRadialGradient(moonX+sway,wy,0,moonX+sway,wy,Math.max(moonR*3.4,H*0.4));
+      rg.addColorStop(0,"rgba("+p.reflect+",0.22)");rg.addColorStop(0.5,"rgba("+p.reflect+",0.07)");rg.addColorStop(1,"rgba("+p.reflect+",0)");
+      ctx.fillStyle=rg;ctx.fillRect(moonX-moonR*3.4+sway,wy,moonR*6.8,H-wy);
+      ctx.restore();
+
+      // faint, soft surface highlight (not a hard crest)
+      ctx.beginPath();
+      for(var hx=0;hx<=W;hx+=8){var hyy=surfaceAt(hx,t,amp);if(hx===0)ctx.moveTo(hx,hyy);else ctx.lineTo(hx,hyy);}
+      ctx.strokeStyle="rgba("+p.reflect+",0.18)";ctx.lineWidth=1;ctx.stroke();
+
+      // rain ripples, soft
+      for(var r=ripples.length-1;r>=0;r--){
+        var rp=ripples[r];rp.r+=0.8;rp.a*=0.95;
+        if(rp.a<0.03){ripples.splice(r,1);continue;}
+        ctx.strokeStyle="rgba("+p.reflect+","+rp.a.toFixed(3)+")";ctx.lineWidth=1;
+        ctx.beginPath();ctx.ellipse(rp.x,rp.y,rp.r,rp.r*0.28,0,0,6.2832);ctx.stroke();
+      }
+
+      // film grain to break up banding, then a soft vignette
+      if(grainPat){ctx.globalAlpha=isDark()?0.05:0.035;ctx.fillStyle=grainPat;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}
+      var vg=ctx.createRadialGradient(W/2,H*0.44,Math.min(W,H)*0.3,W/2,H*0.5,Math.max(W,H)*0.78);
+      vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,isDark()?"rgba(0,0,0,0.38)":"rgba(40,70,80,0.18)");
+      ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+
+      requestAnimationFrame(frame);
+    }
+
+    // ---------- input ----------
+    orb.addEventListener("click",toggle);
+    tabs.forEach(function(t){t.addEventListener("click",function(){setMinutes(+t.dataset.min);});});
+    document.addEventListener("keydown",function(e){if(e.code==="Space"){e.preventDefault();toggle();}});
+
+    resize();wy=targetWaterY();render();requestAnimationFrame(frame);
+  })();
+</script>
+
+</body></html>
